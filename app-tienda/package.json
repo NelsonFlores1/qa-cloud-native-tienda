@@ -1,0 +1,24 @@
+{
+  "name": "app-tienda",
+  "version": "1.0.0",
+  "description": "App Tienda (front SPA + API REST) - aplicacion bajo prueba del reto practico Modulo 5 (QA Cloud-Native).",
+  "type": "module",
+  "main": "servidor/server.js",
+  "scripts": {
+    "generar": "npm --prefix ../datos install && node ../datos/generar-datos.js",
+    "start": "node servidor/server.js",
+    "dev": "node --watch servidor/server.js"
+  },
+  "keywords": [
+    "qa",
+    "cloud-native",
+    "tienda",
+    "e2e",
+    "api"
+  ],
+  "author": "Lite Thinking University of Technology",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}

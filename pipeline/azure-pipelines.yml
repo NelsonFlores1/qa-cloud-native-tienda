@@ -1,0 +1,217 @@
+# ============================================================
+# azure-pipelines.yml - CI/CD de la Tienda con QUALITY GATES
+#
+#   Build -> SmokeTests -> LoadTest -> E2E -> Deploy
+#              GATE 1       GATE 2    GATE 3
+#
+# Un gate es un paso que sale con codigo != 0 si algo falla; al fallar, los
+# stages siguientes (incluido Deploy) NO se ejecutan.
+#
+#   GATE 1  SmokeTests : la app "encendio" (health, catalogo, crear pedido)
+#   GATE 2  LoadTest   : SLA de rendimiento (p95 < 800 ms y error < 1 %)
+#   GATE 3  E2E        : escenarios Gherkin (Playwright + Screenplay) en verde
+#
+# Para usarlo: Pipelines > New pipeline > GitHub > tu repo >
+#   "Existing Azure Pipelines YAML file" > /pipeline/azure-pipelines.yml
+# ============================================================
+
+trigger:
+  branches:
+    include:
+      - main
+
+# Se cambian en "Run pipeline" para demostrar el gate de carga en ROJO
+# (ej. slaP95Ms = 1) sin tocar el codigo.
+parameters:
+  - name: slaP95Ms
+    displayName: 'SLA p95 (ms)'
+    type: number
+    default: 800
+  - name: slaErrorPct
+    displayName: 'SLA tasa de error (%)'
+    type: number
+    default: 1
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  NODE_VERSION: '20.x'
+  PYTHON_VERSION: '3.11'
+  BASE_URL: 'http://localhost:3000'
+  APP_DIR: 'app-tienda'       # app bajo prueba
+  DATOS_DIR: 'datos'          # generador de datos (Faker)
+  TEST_DIR: 'pipeline'        # tests/smoke-api.js y tests/carga-simple.js
+  E2E_DIR: 'e2e'              # Playwright + Screenplay + pytest-bdd
+  # Azure Test Plans (Fase 3): IDs de TU plan y suite (los ves en la URL de Test Plans:
+  #   .../_testPlans/execute?planId=XX&suiteId=YY). Vacios = no se publica en el plan.
+  # El PAT va como variable SECRETA del pipeline llamada AZURE_DEVOPS_PAT (no aqui).
+  TEST_PLAN_ID: ''
+  TEST_SUITE_ID: ''
+
+stages:
+  # ──────────────────────────────────────────────────────────
+  - stage: Build
+    displayName: 'Build - instalar y generar datos'
+    jobs:
+      - job: build
+        displayName: 'Preparar la app'
+        steps:
+          - task: NodeTool@0
+            displayName: 'Usar Node $(NODE_VERSION)'
+            inputs:
+              versionSpec: '$(NODE_VERSION)'
+
+          - script: npm install
+            displayName: 'Instalar dependencias del generador (Faker, version exacta)'
+            workingDirectory: '$(DATOS_DIR)'
+
+          # Los datos NO se versionan: el pipeline los regenera en cada corrida
+          - script: node generar-datos.js
+            displayName: 'Generar db.json (Faker, semilla fija)'
+            workingDirectory: '$(DATOS_DIR)'
+
+          # Evidencia de reproducibilidad: dos generaciones, mismo hash
+          - script: node verificar-reproducibilidad.js
+            displayName: 'Verificar que los datos son reproducibles'
+            workingDirectory: '$(DATOS_DIR)'
+
+          - script: npm install
+            displayName: 'Instalar dependencias de la app'
+            workingDirectory: '$(APP_DIR)'
+
+          - script: test -s datos/db.json && echo "db.json generado por el pipeline"
+            displayName: 'Verificar que db.json existe'
+            workingDirectory: '$(APP_DIR)'
+
+  # ──────────────────────────────────────────────────────────
+  - stage: SmokeTests
+    displayName: 'SmokeTests - GATE 1: la app encendio'
+    dependsOn: Build
+    jobs:
+      - job: smoke
+        displayName: 'Arrancar app y correr smoke test'
+        steps:
+          - template: templates/preparar-app.yml
+
+          # GATE 1: health, catalogo, crear pedido... Si falla (exit 1) se detiene el pipeline.
+          - script: BASE_URL=$(BASE_URL) node tests/smoke-api.js
+            displayName: 'GATE 1 - Smoke test de la API'
+            workingDirectory: '$(TEST_DIR)'
+
+  # ──────────────────────────────────────────────────────────
+  - stage: LoadTest
+    displayName: 'LoadTest - GATE 2: SLA de rendimiento'
+    dependsOn: SmokeTests
+    jobs:
+      - job: carga
+        displayName: 'Prueba de carga + SLA'
+        steps:
+          - template: templates/preparar-app.yml
+
+          # GATE 2: si p95 o la tasa de error no cumplen el SLA, el script sale con
+          # codigo 1 y la etapa queda en rojo.
+          - script: >
+              BASE_URL=$(BASE_URL) CONCURRENCIA=15 DURACION_S=8
+              SLA_P95_MS=${{ parameters.slaP95Ms }}
+              SLA_ERROR_PCT=${{ parameters.slaErrorPct }}
+              node tests/carga-simple.js
+            displayName: 'GATE 2 - Carga (p95 < ${{ parameters.slaP95Ms }} ms, error < ${{ parameters.slaErrorPct }}%)'
+            workingDirectory: '$(TEST_DIR)'
+
+  # ──────────────────────────────────────────────────────────
+  - stage: E2E
+    displayName: 'E2E - GATE 3: escenarios Gherkin (Fase 3)'
+    dependsOn: LoadTest
+    jobs:
+      - job: e2e
+        displayName: 'Playwright + Screenplay + pytest-bdd'
+        steps:
+          - template: templates/preparar-app.yml
+
+          - task: UsePythonVersion@0
+            displayName: 'Usar Python $(PYTHON_VERSION)'
+            inputs:
+              versionSpec: '$(PYTHON_VERSION)'
+
+          # GATE 3: pytest sale con codigo != 0 si algun escenario falla.
+          #  - tee muestra la salida en el log Y la guarda como evidencia.
+          #  - PIPESTATUS conserva el codigo real de pytest (no el de tee), pero el
+          #    junit.xml ya quedo escrito para publicarlo aunque haya rojos.
+          - script: |
+              set -e
+              mkdir -p resultados
+              pip install -r requirements.txt
+              python -m playwright install --with-deps chromium
+              set +e
+              pytest --junitxml=resultados/junit.xml -o junit_family=xunit2 | tee resultados/pytest-salida.txt
+              CODIGO=${PIPESTATUS[0]}
+              echo "pytest termino con codigo $CODIGO"
+              exit $CODIGO
+            displayName: 'GATE 3 - E2E (pytest-bdd)'
+            workingDirectory: '$(E2E_DIR)'
+            env:
+              BASE_URL: $(BASE_URL)
+
+          # Resultados JUnit en el run (pestana Tests). Siempre corre, aunque haya fallos.
+          # Cada <testcase> lleva la propiedad test_case_id (tag @TC<id> del escenario),
+          # que Azure usa para enlazar el resultado con el Test Case.
+          - task: PublishTestResults@2
+            condition: always()
+            displayName: 'Publicar resultados JUnit (pestana Tests)'
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: '**/junit.xml'
+              searchFolder: '$(System.DefaultWorkingDirectory)/$(E2E_DIR)/resultados'
+              testRunTitle: 'E2E Tienda - build $(Build.BuildNumber)'
+              failTaskOnFailedTests: false
+              publishRunAttachments: true
+
+          # Mueve cada Test Point del plan (pestana Execute) a Passed/Failed.
+          # No tumba el pipeline si falla: es evidencia complementaria.
+          - script: |
+              case "$AZURE_DEVOPS_PAT$TEST_PLAN_ID$TEST_SUITE_ID" in
+                ''|*'$('*)
+                  echo "Falta AZURE_DEVOPS_PAT / TEST_PLAN_ID / TEST_SUITE_ID: me salto la actualizacion del Test Plan."
+                  echo "(El resultado igual quedo en la pestana Tests del run.)"
+                  exit 0 ;;
+              esac
+              if [ -z "$AZURE_DEVOPS_PAT" ] || [ -z "$TEST_PLAN_ID" ] || [ -z "$TEST_SUITE_ID" ]; then
+                echo "Falta alguna variable del Test Plan: me salto la actualizacion."; exit 0
+              fi
+              python tools/publicar_test_plan.py || echo "[AVISO] No se pudo actualizar el Test Plan (revisa IDs/PAT); el run si tiene los resultados."
+            displayName: 'Actualizar Test Points del Test Plan (pestana Execute)'
+            condition: always()
+            workingDirectory: '$(E2E_DIR)'
+            env:
+              AZURE_DEVOPS_PAT: $(AZURE_DEVOPS_PAT)
+              TEST_PLAN_ID: $(TEST_PLAN_ID)
+              TEST_SUITE_ID: $(TEST_SUITE_ID)
+              JUNIT_PATH: 'resultados/junit.xml'
+
+          # Evidencia descargable: junit, salida de pytest, videos, trace
+          - task: PublishPipelineArtifact@1
+            condition: always()
+            displayName: 'Adjuntar evidencia E2E (junit, salida, video, trace)'
+            inputs:
+              targetPath: '$(E2E_DIR)/resultados'
+              artifact: 'evidencia-e2e'
+
+          - task: PublishPipelineArtifact@1
+            condition: always()
+            displayName: 'Adjuntar allure-results'
+            inputs:
+              targetPath: '$(E2E_DIR)/allure-results'
+              artifact: 'allure-results'
+
+  # ──────────────────────────────────────────────────────────
+  - stage: Deploy
+    displayName: 'Deploy (simulado) - solo si TODOS los gates pasan'
+    dependsOn: E2E
+    condition: succeeded()
+    jobs:
+      - job: deploy
+        steps:
+          - script: |
+              echo "Gates 1, 2 y 3 en verde: aqui iria el despliegue real."
+            displayName: 'Deploy'

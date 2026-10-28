@@ -1,0 +1,25 @@
+# Node
+node_modules/
+
+# Datos: se GENERAN con Faker (semilla fija) en cada corrida; no se versionan
+app-tienda/datos/db.json
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Resultados de pruebas (los publica el pipeline como artefactos)
+e2e/resultados/
+e2e/allure-results/
+e2e/allure-report/
+e2e/test-results/
+e2e/playwright-report/
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+.vscode/
+*.log

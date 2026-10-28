@@ -1,0 +1,20 @@
+{
+  "name": "pipeline-tienda",
+  "version": "1.0.0",
+  "description": "Quality gates del pipeline: smoke test y prueba de carga (SLA) sobre la app Tienda",
+  "type": "module",
+  "scripts": {
+    "smoke": "node tests/smoke-api.js",
+    "carga": "node tests/carga-simple.js",
+    "todo": "node tests/smoke-api.js && node tests/carga-simple.js"
+  },
+  "keywords": [
+    "qa",
+    "azure",
+    "devops",
+    "pipelines",
+    "load-testing"
+  ],
+  "author": "Lite Thinking University of Technology",
+  "license": "MIT"
+}

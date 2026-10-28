@@ -1,0 +1,36 @@
+# ============================================================
+# Pasos comunes: dejar la app lista y VIVA en el agente.
+# Cada stage corre en un agente nuevo, asi que cada uno repite estos pasos
+# (los datos NO se versionan: se generan aqui, con semilla fija).
+# ============================================================
+steps:
+  - task: NodeTool@0
+    displayName: 'Usar Node $(NODE_VERSION)'
+    inputs:
+      versionSpec: '$(NODE_VERSION)'
+
+  - script: npm install
+    displayName: 'Instalar dependencias del generador (Faker, version exacta)'
+    workingDirectory: '$(DATOS_DIR)'
+
+  - script: node generar-datos.js
+    displayName: 'Generar db.json (Faker, semilla fija)'
+    workingDirectory: '$(DATOS_DIR)'
+
+  - script: npm install
+    displayName: 'Instalar dependencias de la app'
+    workingDirectory: '$(APP_DIR)'
+
+  # Arranca la app en segundo plano (&) y espera a que /api/health responda
+  - script: |
+      node servidor/server.js &
+      echo "Esperando a que la app responda..."
+      for i in $(seq 1 15); do
+        if curl -sf http://localhost:3000/api/health > /dev/null; then
+          echo "App lista"; break
+        fi
+        sleep 2
+      done
+      curl -sf http://localhost:3000/api/health > /dev/null || { echo "La app no levanto"; exit 1; }
+    displayName: 'Arrancar la app en background'
+    workingDirectory: '$(APP_DIR)'

@@ -1,0 +1,16 @@
+{
+  "name": "datos-tienda",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Generador de datos de prueba (Faker, semilla fija) y anonimizacion de un dump ficticio.",
+  "scripts": {
+    "generar": "node generar-datos.js",
+    "verificar": "node verificar-reproducibilidad.js",
+    "anonimizar": "node anonimizar.js"
+  },
+  "dependencies": {
+    "@faker-js/faker": "9.9.0"
+  },
+  "license": "MIT"
+}

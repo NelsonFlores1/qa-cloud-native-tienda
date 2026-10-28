@@ -1,0 +1,15 @@
+{
+  "_aviso": "DUMP FICTICIO: simula una exportacion de produccion con datos personales. Todos los nombres, correos y telefonos son inventados. Nunca se usa tal cual: pasa por anonimizar.js antes de llegar a db.json.",
+  "clientes": [
+    { "id": 1,  "nombre": "Lucia Fernandez Rojas",   "correo": "lucia.fernandez@correo-ficticio.com",  "telefono": "+000 555-0101", "ciudad": "La Paz" },
+    { "id": 2,  "nombre": "Marco Antonio Quispe",    "correo": "marco.quispe@correo-ficticio.com",     "telefono": "+000 555-0102", "ciudad": "El Alto" },
+    { "id": 3,  "nombre": "Valeria Mendoza Paz",     "correo": "valeria.mendoza@correo-ficticio.com",  "telefono": "+000 555-0103", "ciudad": "Cochabamba" },
+    { "id": 4,  "nombre": "Diego Salinas Torrez",    "correo": "diego.salinas@correo-ficticio.com",    "telefono": "+000 555-0104", "ciudad": "Santa Cruz" },
+    { "id": 5,  "nombre": "Camila Rios Alvarez",     "correo": "camila.rios@correo-ficticio.com",      "telefono": "+000 555-0105", "ciudad": "Sucre" },
+    { "id": 6,  "nombre": "Andres Vargas Limachi",   "correo": "andres.vargas@correo-ficticio.com",    "telefono": "+000 555-0106", "ciudad": "La Paz" },
+    { "id": 7,  "nombre": "Sofia Choque Mamani",     "correo": "sofia.choque@correo-ficticio.com",     "telefono": "+000 555-0107", "ciudad": "Oruro" },
+    { "id": 8,  "nombre": "Javier Montes Arce",      "correo": "javier.montes@correo-ficticio.com",    "telefono": "+000 555-0108", "ciudad": "Tarija" },
+    { "id": 9,  "nombre": "Paula Condori Vega",      "correo": "paula.condori@correo-ficticio.com",    "telefono": "+000 555-0109", "ciudad": "Potosi" },
+    { "id": 10, "nombre": "Ricardo Flores Gutierrez","correo": "ricardo.flores@correo-ficticio.com",   "telefono": "+000 555-0110", "ciudad": "La Paz" }
+  ]
+}
