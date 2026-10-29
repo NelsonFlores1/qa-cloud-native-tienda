@@ -31,6 +31,14 @@ parameters:
     displayName: 'SLA tasa de error (%)'
     type: number
     default: 1
+  - name: runSauce
+    displayName: 'Ejecutar E2E en Sauce Labs'
+    type: boolean
+    default: false
+  - name: publishAcr
+    displayName: 'Publicar imagen en Azure Container Registry'
+    type: boolean
+    default: false
 
 pool:
   vmImage: 'ubuntu-latest'
@@ -48,6 +56,17 @@ variables:
   # El PAT va como variable SECRETA del pipeline llamada AZURE_DEVOPS_PAT (no aqui).
   TEST_PLAN_ID: ''
   TEST_SUITE_ID: ''
+  # Fase 4: los valores reales se crean como variables del pipeline. El usuario
+  # y access key son secretos y NUNCA se escriben en este YAML ni en Git.
+  SAUCE_REGION: 'us-west-1'
+  SAUCE_BASE_URL: ''
+  SAUCE_TUNNEL_NAME: ''
+  SAUCE_PLATFORM: 'Windows 11'
+  SAUCE_BROWSER: 'chrome'
+  SAUCE_BROWSER_VERSION: 'latest'
+  # Fase 5: se configuran en Variables del pipeline cuando exista ACR.
+  AZURE_SUBSCRIPTION: 'sc-tienda-acr'
+  ACR_NAME: 'acrtiendaqa12345'
 
 stages:
   # ──────────────────────────────────────────────────────────
@@ -205,13 +224,185 @@ stages:
               artifact: 'allure-results'
 
   # ──────────────────────────────────────────────────────────
+  # FASE 4: se mantiene apagado hasta contar con credenciales y una URL
+  # accesible por Sauce Labs (publica o a traves de Sauce Connect).
+  - stage: CloudE2E
+    displayName: 'CloudE2E - Sauce Labs (opcional)'
+    dependsOn: E2E
+    jobs:
+      # Esta tarea deja evidencia verificable de la configuracion cuando todavia
+      # no existe una cuenta Sauce Labs. No abre navegadores remotos.
+      - job: sauce_demo
+        displayName: 'Demo guiada de configuracion remota'
+        condition: eq(${{ parameters.runSauce }}, false)
+        steps:
+          - task: UsePythonVersion@0
+            displayName: 'Usar Python $(PYTHON_VERSION)'
+            inputs:
+              versionSpec: '$(PYTHON_VERSION)'
+
+          - script: |
+              mkdir -p resultados
+              pip install -r requirements.txt
+              python tools/ejecutar_sauce.py --demo | tee resultados/sauce-demo-configuracion.txt
+            displayName: 'Fase 4 - Validar configuracion sin cuenta'
+            workingDirectory: '$(E2E_DIR)'
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Adjuntar evidencia de configuracion Sauce Labs'
+            inputs:
+              targetPath: '$(E2E_DIR)/resultados/sauce-demo-configuracion.txt'
+              artifact: 'evidencia-sauce-demo'
+
+      - job: sauce_labs
+        displayName: 'Ejecutar Playwright en navegador remoto'
+        condition: eq(${{ parameters.runSauce }}, true)
+        steps:
+          - task: UsePythonVersion@0
+            displayName: 'Usar Python $(PYTHON_VERSION)'
+            inputs:
+              versionSpec: '$(PYTHON_VERSION)'
+
+          - script: |
+              mkdir -p resultados
+              pip install -r requirements.txt
+              python tools/ejecutar_sauce.py
+            displayName: 'Fase 4 - E2E remoto Sauce Labs'
+            workingDirectory: '$(E2E_DIR)'
+            env:
+              SAUCE_USERNAME: $(SAUCE_USERNAME)
+              SAUCE_ACCESS_KEY: $(SAUCE_ACCESS_KEY)
+              SAUCE_BASE_URL: $(SAUCE_BASE_URL)
+              SAUCE_TUNNEL_NAME: $(SAUCE_TUNNEL_NAME)
+              SAUCE_REGION: $(SAUCE_REGION)
+              SAUCE_PLATFORM: $(SAUCE_PLATFORM)
+              SAUCE_BROWSER: $(SAUCE_BROWSER)
+              SAUCE_BROWSER_VERSION: $(SAUCE_BROWSER_VERSION)
+
+          - task: PublishTestResults@2
+            condition: always()
+            displayName: 'Publicar resultados JUnit de Sauce Labs'
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: '**/sauce-junit.xml'
+              searchFolder: '$(System.DefaultWorkingDirectory)/$(E2E_DIR)/resultados'
+              testRunTitle: 'E2E remoto Sauce Labs - build $(Build.BuildNumber)'
+              failTaskOnFailedTests: false
+
+          - task: PublishPipelineArtifact@1
+            condition: always()
+            displayName: 'Adjuntar evidencia de Sauce Labs'
+            inputs:
+              targetPath: '$(E2E_DIR)/resultados'
+              artifact: 'evidencia-sauce'
+
+  # ──────────────────────────────────────────────────────────
+  # FASE 5: construir y ejecutar la app contenedorizada. Este stage es un
+  # quality gate: /api/health debe responder desde dentro de la imagen.
+  - stage: Container
+    displayName: 'Container - imagen y healthcheck (Fase 5)'
+    dependsOn: CloudE2E
+    jobs:
+      - job: docker_local
+        displayName: 'Construir y validar contenedor'
+        steps:
+          - script: |
+              set -e
+              IMAGEN="tienda-qa:$(Build.BuildId)"
+              CONTENEDOR="tienda-qa-fase5"
+              trap 'docker rm -f "$CONTENEDOR" >/dev/null 2>&1 || true' EXIT
+              docker build --tag "$IMAGEN" .
+              docker run -d --name "$CONTENEDOR" -p 3000:3000 "$IMAGEN"
+              for i in $(seq 1 20); do
+                ESTADO=$(docker inspect --format='{{.State.Health.Status}}' "$CONTENEDOR")
+                if [ "$ESTADO" = "healthy" ]; then
+                  break
+                fi
+                sleep 2
+              done
+              ESTADO=$(docker inspect --format='{{.State.Health.Status}}' "$CONTENEDOR")
+              if [ "$ESTADO" != "healthy" ]; then
+                echo "El contenedor no alcanzo estado healthy: $ESTADO"
+                docker logs "$CONTENEDOR"
+                exit 1
+              fi
+              curl -fsS http://localhost:3000/api/health
+            displayName: 'GATE 4 - Docker build, run y /api/health'
+
+  # ──────────────────────────────────────────────────────────
+  # FASE 5: el consumidor genera el Pact y el provider real lo verifica.
+  - stage: ContractTests
+    displayName: 'ContractTests - Pact consumer provider (Fase 5)'
+    dependsOn: Container
+    jobs:
+      - job: pact
+        displayName: 'Generar y verificar contrato GET productos'
+        steps:
+          - task: NodeTool@0
+            displayName: 'Usar Node $(NODE_VERSION)'
+            inputs:
+              versionSpec: '$(NODE_VERSION)'
+
+          - script: |
+              npm ci --prefix datos
+              node datos/generar-datos.js
+              npm ci --prefix pact
+              npm test --prefix pact
+            displayName: 'GATE 5 - Pact consumer y provider'
+
+          - task: PublishPipelineArtifact@1
+            condition: always()
+            displayName: 'Adjuntar contrato Pact generado'
+            inputs:
+              targetPath: 'pact/pacts'
+              artifact: 'pact-contracts'
+
+  # ──────────────────────────────────────────────────────────
+  # Publicacion preparada para ACR. El job demo deja evidencia sin necesitar
+  # suscripcion. Con publishAcr=true, AzureCLI usa la service connection real.
+  - stage: AcrPublication
+    displayName: 'ACR - publicacion de imagen (opcional Fase 5)'
+    dependsOn: ContractTests
+    jobs:
+      - job: acr_demo
+        displayName: 'Demo guiada de ACR'
+        condition: eq(${{ parameters.publishAcr }}, false)
+        steps:
+          - script: |
+              echo "Demo guiada: la imagen se construyo y valido localmente en el stage Container."
+              echo "Para publicar, crea AZURE_SUBSCRIPTION y ACR_NAME como variables del pipeline."
+              echo "Luego vuelve a ejecutar con publishAcr=true."
+            displayName: 'Fase 5 - Configuracion ACR pendiente de cuenta'
+
+      - job: acr_publish
+        displayName: 'Publicar imagen en Azure Container Registry'
+        condition: eq(${{ parameters.publishAcr }}, true)
+        steps:
+          - task: AzureCLI@2
+            displayName: 'Construir y publicar imagen con az acr build'
+            inputs:
+              azureSubscription: '$(AZURE_SUBSCRIPTION)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                test -n "$ACR_NAME" || { echo "Falta ACR_NAME"; exit 1; }
+                az acr build --registry "$ACR_NAME" --image "tienda-qa:$(Build.BuildId)" --file Dockerfile .
+            env:
+              ACR_NAME: $(ACR_NAME)
+
+  # ──────────────────────────────────────────────────────────
   - stage: Deploy
     displayName: 'Deploy (simulado) - solo si TODOS los gates pasan'
-    dependsOn: E2E
+    dependsOn:
+      - E2E
+      - CloudE2E
+      - Container
+      - ContractTests
+      - AcrPublication
     condition: succeeded()
     jobs:
       - job: deploy
         steps:
           - script: |
-              echo "Gates 1, 2 y 3 en verde: aqui iria el despliegue real."
+              echo "Gates funcionales, E2E, contenedor y contrato en verde: aqui iria el despliegue real."
             displayName: 'Deploy'
