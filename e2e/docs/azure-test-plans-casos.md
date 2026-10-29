@@ -21,6 +21,14 @@ traducen a Gherkin (carpeta `features/`) y el resultado se publica de vuelta al 
 
 Automatizado en: `features/catalogo.feature` (tag `@TC<id del caso Catalogo>`)
 
+**Descripcion para pegar en el Test Case** (campo *Description*, deja el vinculo visible en el plan):
+
+```
+Caso automatizado en el repositorio de GitHub: e2e/features/catalogo.feature
+Escenario: Filtrar productos por categoria Hogar
+Tag de enlace: @TC<id> (el JUnit lo publica el stage E2E de pipeline/azure-pipelines.yml)
+```
+
 ### Caso "Carrito" - Agregar un producto al carrito
 
 | # | Accion | Resultado esperado |
@@ -29,6 +37,14 @@ Automatizado en: `features/catalogo.feature` (tag `@TC<id del caso Catalogo>`)
 | 2 | Pulsar **Agregar al carrito** en el producto 1 | El contador del carrito muestra **1** |
 
 Automatizado en: `features/carrito.feature` (tag `@TC<id del caso Carrito>`)
+
+**Descripcion para pegar en el Test Case** (campo *Description*, deja el vinculo visible en el plan):
+
+```
+Caso automatizado en el repositorio de GitHub: e2e/features/carrito.feature
+Escenario: Agregar un producto al carrito
+Tag de enlace: @TC<id> (el JUnit lo publica el stage E2E de pipeline/azure-pipelines.yml)
+```
 
 ### Caso "Pedidos" - Confirmar un pedido con un producto
 
@@ -39,6 +55,14 @@ Automatizado en: `features/carrito.feature` (tag `@TC<id del caso Carrito>`)
 | 3 | Escribir el correo `ana@tienda-qa.com` y pulsar **Confirmar pedido** | Aparece "Pedido confirmado" con un numero de pedido no vacio |
 
 Automatizado en: `features/pedidos.feature` (tag `@TC<id del caso Pedidos>`)
+
+**Descripcion para pegar en el Test Case** (campo *Description*, deja el vinculo visible en el plan):
+
+```
+Caso automatizado en el repositorio de GitHub: e2e/features/pedidos.feature
+Escenario: Confirmar un pedido con un producto
+Tag de enlace: @TC<id> (el JUnit lo publica el stage E2E de pipeline/azure-pipelines.yml)
+```
 
 ## 3. Enlazar los IDs con el codigo
 

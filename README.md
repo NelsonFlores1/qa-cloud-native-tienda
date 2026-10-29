@@ -1,6 +1,5 @@
 # Reto practico - Modulo 5: QA Cloud-Native, Automatizacion Inteligente con IA Generativa
 
-**Autor:** _tu nombre_ · **Diplomado:** Lite Thinking Institute of Technology
 
 Proyecto sobre la **app Tienda** (front SPA + API REST en Node/Express): datos de prueba reproducibles, pipeline
 CI/CD en Azure con quality gates, y automatizacion E2E con Playwright + Screenplay + BDD asistida por IA.
