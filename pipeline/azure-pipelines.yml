@@ -363,7 +363,8 @@ stages:
 
   # ──────────────────────────────────────────────────────────
   # Publicacion preparada para ACR. El job demo deja evidencia sin necesitar
-  # suscripcion. Con publishAcr=true, AzureCLI usa la service connection real.
+  # suscripcion. Con publishAcr=true, el agente construye y hace docker push.
+  # No se usa az acr build porque algunas suscripciones educativas bloquean ACR Tasks.
   - stage: AcrPublication
     displayName: 'ACR - publicacion de imagen (opcional Fase 5)'
     dependsOn: ContractTests
@@ -383,14 +384,20 @@ stages:
         condition: eq(${{ parameters.publishAcr }}, true)
         steps:
           - task: AzureCLI@2
-            displayName: 'Construir y publicar imagen con az acr build'
+            displayName: 'Construir y publicar imagen con Docker push'
             inputs:
               azureSubscription: '$(AZURE_SUBSCRIPTION)'
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               inlineScript: |
+                set -euo pipefail
                 test -n "$ACR_NAME" || { echo "Falta ACR_NAME"; exit 1; }
-                az acr build --registry "$ACR_NAME" --image "tienda-qa:$(Build.BuildId)" --file Dockerfile .
+                LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer --output tsv)
+                IMAGEN="$LOGIN_SERVER/tienda-qa:$(Build.BuildId)"
+                az acr login --name "$ACR_NAME"
+                docker build --file Dockerfile --tag "$IMAGEN" .
+                docker push "$IMAGEN"
+                echo "Imagen publicada: $IMAGEN"
             env:
               ACR_NAME: $(ACR_NAME)
 

@@ -177,7 +177,7 @@ solo lugar.
 | Stage `Deploy` | **Simulado**: solo imprime un mensaje, no despliega nada |
 | Sauce Labs (Fase 4) | **Demo guiada implementada**: capacidades remotas, ejecutor por variables y stage `CloudE2E` desactivado por defecto. Falta una cuenta, secretos y una URL accesible para una ejecucion remota real. |
 | Docker y Pact (Fase 5) | **Implementados**: Dockerfile genera los datos dentro de la imagen, verifica `/api/health` y Pact valida `GET /api/productos` entre consumidor y provider. |
-| ACR / App Service (Fase 5) | **Demo guiada preparada**: stage `AcrPublication`; una publicacion real requiere `AZURE_SUBSCRIPTION`, `ACR_NAME` y ejecutar `publishAcr=true`. |
+| ACR / App Service (Fase 5) | Stage `AcrPublication` construye en el agente y publica con `docker push`; requiere `AZURE_SUBSCRIPTION`, `ACR_NAME`, rol `AcrPush` para la conexion y ejecutar `publishAcr=true`. |
 
 **Casos de borde con IA (Fase 3).** El archivo `e2e/features/bordes.feature` es un borrador redactado con apoyo de
 Claude a partir del codigo del front; la sesion con el MCP de Playwright, su prompt y su captura se registran en
