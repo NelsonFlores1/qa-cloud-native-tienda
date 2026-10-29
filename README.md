@@ -11,8 +11,8 @@ CI/CD en Azure con quality gates, y automatizacion E2E con Playwright + Screenpl
 | 1 - Datos de prueba realistas | `generar-datos.js` con semilla fija + `db.json` generado (+ anonimizacion, reto extra) | [`datos/`](datos) | Hecho |
 | 2 - Pipeline CI/CD con quality gates | `azure-pipelines.yml` (Build > SmokeTests > LoadTest > E2E > Deploy) | [`pipeline/`](pipeline) | Hecho |
 | 3 - Del caso manual al automatizado con IA | Features, steps, Screenplay, casos de borde, enlace a Test Plans | [`e2e/`](e2e) | Hecho |
-| 4 - Ejecucion en la nube (Sauce Labs) | Configuracion remota + evidencia | `e2e/` + `pipeline/` | Pendiente |
-| 5 - Contenedores y contract testing | `Dockerfile`, imagen en ACR, Pact | raiz y `pact/` | Pendiente |
+| 4 - Ejecucion en la nube (Sauce Labs) | Demo guiada: configuracion remota, stage opcional y evidencia sin credenciales | `e2e/sauce/` + `e2e/tools/ejecutar_sauce.py` + `pipeline/` | Hecho como demo guiada |
+| 5 - Contenedores y contract testing | Dockerfile, healthcheck, contrato Pact y publicacion ACR opcional | raiz, `pact/` y `pipeline/` | Hecho localmente y ACR listo como demo guiada |
 | 6 - Metricas y estrategia | DORA, piramide de pruebas, riesgos | este README y el documento de soporte | Pendiente |
 
 ## Estructura del repositorio
@@ -28,8 +28,8 @@ CI/CD en Azure con quality gates, y automatizacion E2E con Playwright + Screenpl
 ├─ e2e/               Playwright + Screenplay + pytest-bdd (ver e2e/README.md)
 ├─ pipeline/          azure-pipelines.yml con stages y gates; tests/ de smoke y carga
 ├─ docs/evidencias/   Capturas para el documento de soporte
-├─ Dockerfile         (Fase 5)
-├─ pact/              (Fase 5, contract testing)
+├─ Dockerfile         Fase 5: imagen reproducible y healthcheck
+├─ pact/              Fase 5: contrato Consumer TiendaWeb - Provider TiendaApi
 └─ README.md
 ```
 
@@ -94,6 +94,25 @@ pytest
 
 Detalle de features, Screenplay y los prompts de IA en [`e2e/README.md`](e2e/README.md).
 
+**5. Contenedor y contrato Pact (Fase 5)**
+
+```powershell
+# Desde la raiz: genera db.json DENTRO de la imagen y expone /api/health
+docker build -t tienda-qa:local .
+docker run -d --name tienda-qa-fase5 -p 3000:3000 tienda-qa:local
+docker inspect --format='{{.State.Health.Status}}' tienda-qa-fase5
+Invoke-RestMethod http://localhost:3000/api/health
+docker stop tienda-qa-fase5
+docker rm tienda-qa-fase5
+
+# Contrato: genera el pact y lo verifica contra la API real
+cd datos; npm ci; npm run generar; cd ..\pact
+npm ci
+npm test
+```
+
+El contrato resultante queda en `pact/pacts/TiendaWeb-TiendaApi.json`. La guia de ACR y las evidencias requeridas estan en [`pact/README.md`](pact/README.md).
+
 ## Pipeline en Azure DevOps (Fase 2 y 3)
 
 ```
@@ -156,8 +175,9 @@ solo lugar.
 | Generacion de datos, anonimizacion, smoke, carga y E2E | Corren de verdad en local y en el agente de Azure Pipelines |
 | Conexion GitHub > Azure Pipelines, Test Plans, PAT | Se configuran en los portales; la evidencia son capturas de la cuenta real |
 | Stage `Deploy` | **Simulado**: solo imprime un mensaje, no despliega nada |
-| Sauce Labs (Fase 4) | _Completar segun se resuelva: ejecucion real o demo guiada con configuracion y codigo listos_ |
-| ACR / App Service (Fase 5) | _Completar_ |
+| Sauce Labs (Fase 4) | **Demo guiada implementada**: capacidades remotas, ejecutor por variables y stage `CloudE2E` desactivado por defecto. Falta una cuenta, secretos y una URL accesible para una ejecucion remota real. |
+| Docker y Pact (Fase 5) | **Implementados**: Dockerfile genera los datos dentro de la imagen, verifica `/api/health` y Pact valida `GET /api/productos` entre consumidor y provider. |
+| ACR / App Service (Fase 5) | **Demo guiada preparada**: stage `AcrPublication`; una publicacion real requiere `AZURE_SUBSCRIPTION`, `ACR_NAME` y ejecutar `publishAcr=true`. |
 
 **Casos de borde con IA (Fase 3).** El archivo `e2e/features/bordes.feature` es un borrador redactado con apoyo de
 Claude a partir del codigo del front; la sesion con el MCP de Playwright, su prompt y su captura se registran en

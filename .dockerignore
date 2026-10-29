@@ -1,0 +1,11 @@
+.git
+.pytest_cache
+**/node_modules
+**/.venv
+**/__pycache__
+docs/evidencias
+e2e
+pipeline
+pact
+README.md
+*.log

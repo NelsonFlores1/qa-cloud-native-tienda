@@ -1,0 +1,13 @@
+{
+  "platformName": "Windows 11",
+  "browserName": "chrome",
+  "browserVersion": "latest",
+  "sauce:options": {
+    "devTools": true,
+    "username": "${SAUCE_USERNAME}",
+    "accessKey": "${SAUCE_ACCESS_KEY}",
+    "name": "E2E Tienda Playwright",
+    "build": "${BUILD_BUILDNUMBER}",
+    "tunnelName": "${SAUCE_TUNNEL_NAME}"
+  }
+}

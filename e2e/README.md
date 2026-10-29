@@ -35,3 +35,14 @@ pytest -m ia                             # solo los 3 casos de borde
 Contra otra URL (Fase 4): `BASE_URL=https://mi-app pytest` (Windows: `$env:BASE_URL="https://mi-app"; pytest`).
 
 Genera `resultados/junit.xml` si agregas `--junitxml=resultados/junit.xml -o junit_family=xunit2`.
+
+## Fase 4: ejecucion remota en Sauce Labs
+
+El proyecto incluye una modalidad de **demo guiada** para cuando no se dispone de una cuenta. La configuracion remota esta en `sauce/` y el ejecutor en `tools/ejecutar_sauce.py`; no contiene credenciales ni inicia sesiones remotas por defecto.
+
+```powershell
+# Evidencia de configuracion sin requerir una cuenta Sauce Labs
+.\.venv\Scripts\python.exe tools\ejecutar_sauce.py --demo
+```
+
+Guarda una captura del resultado como `docs/evidencias/fase4-configuracion-sauce.png`. Para activar una cuenta real, revisa [`sauce/README.md`](sauce/README.md): usa las variables secretas `SAUCE_USERNAME` y `SAUCE_ACCESS_KEY`, una `SAUCE_BASE_URL` publica o Sauce Connect, y marca el parametro `runSauce` en Azure Pipelines.
