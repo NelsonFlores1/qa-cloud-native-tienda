@@ -346,6 +346,10 @@ stages:
           - script: |
               npm ci --prefix datos
               node datos/generar-datos.js
+              # El verificador inicia app-tienda/servidor/server.js en este agente.
+              # Por ello sus dependencias (por ejemplo express) deben existir aqui,
+              # ademas de las dependencias propias de Pact.
+              npm ci --prefix app-tienda --omit=dev
               npm ci --prefix pact
               npm test --prefix pact
             displayName: 'GATE 5 - Pact consumer y provider'
