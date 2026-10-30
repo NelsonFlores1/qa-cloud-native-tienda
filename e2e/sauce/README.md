@@ -17,7 +17,7 @@ Desde `e2e/`, ejecutar:
 .\.venv\Scripts\python.exe tools\ejecutar_sauce.py --demo
 ```
 
-El comando imprime el endpoint, la URL objetivo esperada y las capacidades sin revelar secretos ni crear una sesion remota. Tomar una captura de esa consola y guardarla en `docs/evidencias/fase4-configuracion-sauce.png`.
+El comando imprime el endpoint, la URL objetivo esperada y las capacidades sin revelar secretos ni crear una sesion remota. Tomar una captura de esa consola y conservarla junto con el documento de soporte, fuera del repositorio.
 
 Tambien tomar una captura del archivo `sauce-capabilities.example.json` o del stage `CloudE2E` en Azure Pipelines. Esa evidencia demuestra la configuracion y el codigo listos para conectarse, que es la alternativa elegida cuando no hay una cuenta de Sauce Labs.
 

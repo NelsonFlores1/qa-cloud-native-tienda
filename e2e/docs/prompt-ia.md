@@ -58,7 +58,7 @@ producto" siga en verde. No toques nada mas.
 | Prompt usado | Prompt 1 (o el que hayas usado; pegalo aqui tal cual) |
 | Escenarios propuestos por la IA | _completar_ |
 | Cambios que hice yo tras revisarlos | _completar_ |
-| Captura de la sesion | `docs/evidencias/fase3-prompt-ia.png` (agregar) |
+| Captura de la sesion | Conservar junto con el documento de soporte, fuera del repositorio. |
 
 ## Estado de `features/bordes.feature`
 

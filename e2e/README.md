@@ -45,4 +45,4 @@ El proyecto incluye una modalidad de **demo guiada** para cuando no se dispone d
 .\.venv\Scripts\python.exe tools\ejecutar_sauce.py --demo
 ```
 
-Guarda una captura del resultado como `docs/evidencias/fase4-configuracion-sauce.png`. Para activar una cuenta real, revisa [`sauce/README.md`](sauce/README.md): usa las variables secretas `SAUCE_USERNAME` y `SAUCE_ACCESS_KEY`, una `SAUCE_BASE_URL` publica o Sauce Connect, y marca el parametro `runSauce` en Azure Pipelines.
+Guarda una captura del resultado junto con el documento de soporte, fuera del repositorio. Para activar una cuenta real, revisa [`sauce/README.md`](sauce/README.md): usa las variables secretas `SAUCE_USERNAME` y `SAUCE_ACCESS_KEY`, una `SAUCE_BASE_URL` publica o Sauce Connect, y marca el parametro `runSauce` en Azure Pipelines.

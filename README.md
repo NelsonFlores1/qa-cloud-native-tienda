@@ -9,11 +9,11 @@ CI/CD en Azure con quality gates, y automatizacion E2E con Playwright + Screenpl
 | Fase | Entregable | Donde | Estado |
 |------|-----------|-------|--------|
 | 1 - Datos de prueba realistas | `generar-datos.js` con semilla fija + `db.json` generado (+ anonimizacion, reto extra) | [`datos/`](datos) | Hecho |
-| 2 - Pipeline CI/CD con quality gates | `azure-pipelines.yml` (Build > SmokeTests > LoadTest > E2E > Deploy) | [`pipeline/`](pipeline) | Hecho |
+| 2 - Pipeline CI/CD con quality gates | `azure-pipelines.yml` con build, smoke, carga, E2E, contenedor, contrato, ACR y deploy simulado | [`pipeline/`](pipeline) | Hecho |
 | 3 - Del caso manual al automatizado con IA | Features, steps, Screenplay, casos de borde, enlace a Test Plans | [`e2e/`](e2e) | Hecho |
 | 4 - Ejecucion en la nube (Sauce Labs) | Demo guiada: configuracion remota, stage opcional y evidencia sin credenciales | `e2e/sauce/` + `e2e/tools/ejecutar_sauce.py` + `pipeline/` | Hecho como demo guiada |
-| 5 - Contenedores y contract testing | Dockerfile, healthcheck, contrato Pact y publicacion ACR opcional | raiz, `pact/` y `pipeline/` | Hecho localmente y ACR listo como demo guiada |
-| 6 - Metricas y estrategia | DORA, piramide de pruebas, riesgos | este README y el documento de soporte | Pendiente |
+| 5 - Contenedores y contract testing | Dockerfile, healthcheck, contrato Pact e imagen publicada en ACR | raiz, `pact/` y `pipeline/` | Hecho; imagen `tienda-qa` publicada en ACR |
+| 6 - Metricas y estrategia | DORA, piramide de pruebas y riesgos | este README y el documento de soporte | Hecho |
 
 ## Estructura del repositorio
 
@@ -27,7 +27,6 @@ CI/CD en Azure con quality gates, y automatizacion E2E con Playwright + Screenpl
 │  └─ verificar-reproducibilidad.js   Genera dos veces y compara el hash
 ├─ e2e/               Playwright + Screenplay + pytest-bdd (ver e2e/README.md)
 ├─ pipeline/          azure-pipelines.yml con stages y gates; tests/ de smoke y carga
-├─ docs/evidencias/   Capturas para el documento de soporte
 ├─ Dockerfile         Fase 5: imagen reproducible y healthcheck
 ├─ pact/              Fase 5: contrato Consumer TiendaWeb - Provider TiendaApi
 └─ README.md
@@ -94,7 +93,22 @@ pytest
 
 Detalle de features, Screenplay y los prompts de IA en [`e2e/README.md`](e2e/README.md).
 
-**5. Contenedor y contrato Pact (Fase 5)**
+**5. Configuracion remota guiada (Fase 4)**
+
+La configuracion remota queda preparada sin guardar credenciales en el repositorio. Este comando muestra el
+endpoint, las capabilities y la URL que se usarian en Sauce Labs, sin abrir una sesion remota:
+
+```powershell
+cd e2e
+.\.venv\Scripts\python.exe tools\ejecutar_sauce.py --demo
+cd ..
+```
+
+En local, Playwright abre el navegador en el equipo y usa `http://localhost:3000`. Para Sauce Labs se conservan
+los mismos escenarios, pero se usa una URL publica o un tunel, capabilities de navegador y las variables seguras
+`SAUCE_USERNAME` y `SAUCE_ACCESS_KEY`.
+
+**6. Contenedor y contrato Pact (Fase 5)**
 
 ```powershell
 # Desde la raiz: genera db.json DENTRO de la imagen y expone /api/health
@@ -113,11 +127,23 @@ npm test
 
 El contrato resultante queda en `pact/pacts/TiendaWeb-TiendaApi.json`. La guia de ACR y las evidencias requeridas estan en [`pact/README.md`](pact/README.md).
 
+**7. Publicar la imagen en ACR desde el pipeline**
+
+En Azure DevOps, ejecuta el pipeline y activa el parametro `publishAcr`. La conexion de servicio debe apuntar a la
+suscripcion correcta, y la identidad de la conexion necesita el rol `AcrPush` sobre el registro. El stage
+`AcrPublication` construye la imagen en el agente y la publica como:
+
+```text
+<nombre-del-registro>.azurecr.io/tienda-qa:<numero-de-build>
+```
+
+La corrida final de esta practica publico una imagen en el repositorio `tienda-qa` de ACR.
+
 ## Pipeline en Azure DevOps (Fase 2 y 3)
 
 ```
-Build -> SmokeTests -> LoadTest -> E2E -> Deploy (simulado)
-           GATE 1       GATE 2    GATE 3
+Build -> SmokeTests -> LoadTest -> E2E -> CloudE2E -> Container -> ContractTests -> AcrPublication -> Deploy (simulado)
+           GATE 1       GATE 2    GATE 3                 GATE 4       GATE 5
 ```
 
 | Gate | Stage | Que valida | Como detiene el deploy |
@@ -125,6 +151,8 @@ Build -> SmokeTests -> LoadTest -> E2E -> Deploy (simulado)
 | 1 | `SmokeTests` | La app encendio: health, catalogo, crear pedido (`pipeline/tests/smoke-api.js`) | `exit 1` si algo falla |
 | 2 | `LoadTest` | SLA: p95 < 800 ms y error < 1 % (`pipeline/tests/carga-simple.js`) | `exit 1` si no cumple |
 | 3 | `E2E` | Escenarios Gherkin en verde (`pytest`) | pytest sale con codigo != 0 |
+| 4 | `Container` | La imagen responde en `/api/health` | falla el healthcheck del contenedor |
+| 5 | `ContractTests` | Contrato Pact de `GET /api/productos` | consumer o provider termina con error |
 
 Cada stage depende del anterior y `Deploy` solo corre si todos terminaron bien.
 
@@ -177,18 +205,51 @@ solo lugar.
 | Stage `Deploy` | **Simulado**: solo imprime un mensaje, no despliega nada |
 | Sauce Labs (Fase 4) | **Demo guiada implementada**: capacidades remotas, ejecutor por variables y stage `CloudE2E` desactivado por defecto. Falta una cuenta, secretos y una URL accesible para una ejecucion remota real. |
 | Docker y Pact (Fase 5) | **Implementados**: Dockerfile genera los datos dentro de la imagen, verifica `/api/health` y Pact valida `GET /api/productos` entre consumidor y provider. |
-| ACR / App Service (Fase 5) | Stage `AcrPublication` construye en el agente y publica con `docker push`; requiere `AZURE_SUBSCRIPTION`, `ACR_NAME`, rol `AcrPush` para la conexion y ejecutar `publishAcr=true`. |
+| ACR / App Service (Fase 5) | La imagen se publico de verdad en ACR mediante `AcrPublication`. El stage usa `docker push`; necesita `AZURE_SUBSCRIPTION`, `ACR_NAME`, el rol `AcrPush` y ejecutar `publishAcr=true`. App Service no se desplego. |
 
-**Casos de borde con IA (Fase 3).** El archivo `e2e/features/bordes.feature` es un borrador redactado con apoyo de
-Claude a partir del codigo del front; la sesion con el MCP de Playwright, su prompt y su captura se registran en
-[`e2e/docs/prompt-ia.md`](e2e/docs/prompt-ia.md).
+**Casos de borde con IA (Fase 3).** El archivo `e2e/features/bordes.feature` incluye casos de borde preparados a
+partir del codigo del front. El prompt y la guia de registro estan en
+[`e2e/docs/prompt-ia.md`](e2e/docs/prompt-ia.md); la captura se conserva con el documento de soporte, fuera del repositorio.
 
 **Uso de IA.** El proyecto parte de los ejemplos de clase (app Tienda, generador de datos, `smoke-api.js`,
 `carga-simple.js`, framework E2E y pipeline de la Sesion 3 y 4) y se adapto con apoyo de Claude (Anthropic).
 
 ## Cuadro de metricas DORA y piramide de pruebas (Fase 6)
 
-_Pendiente: se completa en la Fase 6._
+Estas metricas son una linea base de la practica. Aun no hay trafico ni incidentes de produccion, por eso se
+distingue lo observado en el pipeline de lo que deberia medirse cuando la aplicacion tenga operacion real.
+
+| Metrica | Linea base | Siguiente medicion |
+|---|---|---|
+| Frecuencia de despliegue | Una imagen publicada en ACR (`tienda-qa`, tag del build). | Contar cada publicacion que supere todos los gates. |
+| Lead time de cambio | El pipeline conserva el commit, el numero de build y los tiempos de cada etapa. | Medir desde el commit hasta el tag publicado en ACR. |
+| Tasa de fallos de cambio | No hubo despliegue productivo; los fallos detectados fueron de CI y se corrigieron antes de la corrida final. | Separar fallos de CI de fallos posteriores a produccion. |
+| MTTR | No aplica aun porque no se registraron incidentes de produccion. | Medir desde la deteccion hasta recuperar el servicio. |
+
+```text
+                  E2E
+        Playwright + pytest-bdd
+              7 escenarios
+
+        Contrato e integracion
+     Pact + smoke API + prueba de carga
+
+              Unitarias
+  Generador, carrito y validaciones
+  Siguiente paso: ampliar esta base
+```
+
+Las pruebas E2E validan el recorrido completo. Pact, smoke y carga comprueban la comunicacion entre componentes.
+La base unitaria debe crecer para detectar antes las reglas simples.
+
+### Riesgos y como reducirlos
+
+| Riesgo | Como se reduce |
+|---|---|
+| Dependencia de servicios cloud | La publicacion usa `docker push` y la conexion tiene el rol `AcrPush`. |
+| Pocas pruebas unitarias | Agregar pruebas para el generador, validaciones y calculos de carrito. |
+| Metricas sin produccion | Mantenerlas como linea base y registrar eventos reales cuando exista un entorno productivo. |
+| Ejecucion remota opcional | Mantener la demo guiada y activar Sauce Labs solo con cuenta, secretos y URL accesible. |
 
 ## Creditos
 
